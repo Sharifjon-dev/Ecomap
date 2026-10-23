@@ -34,6 +34,21 @@
 }
 .custom-marker:hover { transform: scale(1.2); }
 
+     /* Адаптация под мобилки */
+@media (max-width: 768px) {
+    /* Если экран маленький, форма и карта встанут друг под друга, а не сожмутся в бок */
+    body > div { 
+        flex-direction: column !important; 
+    }
+    #map { 
+        height: 50vh !important; /* Карта займет половину экрана телефона */
+        width: 100% !important;
+    }
+    .w-96 { 
+        width: 100% !important; /* Боковая панель растянется на весь экран телефона */
+    }
+}
+
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden">
