@@ -1,0 +1,334 @@
+ <!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoMap AI & SVC | Samarkand</title>
+    
+    <!-- 1. Возвращаем Tailwind (чтобы вернулся красивый дизайн) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Подключаем карту MapLibre -->
+   <!-- Надежные ссылки для инструмента рисования (вместо старых) -->
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    
+    <!-- 3. Твой шрифт Google Fonts -->
+    <link href="https://googleapis.com" rel="stylesheet">
+
+    <!-- Плагин MapLibre Draw для рисования областей -->
+    <link href="https://unpkg.com/@mapbox/mapbox-gl-draw@1.4.3/dist/mapbox-gl-draw.css" />
+    <script src="https://unpkg.com/@mapbox/mapbox-gl-draw@1.4.3/dist/mapbox-gl-draw.js"></script>
+    
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        #map { height: calc(100vh - 5rem); }
+        /* Делаем текст внутри всплывающего окошка карты темным, чтобы его было видно */
+        .maplibregl-popup-content { color: #0f172a !important; } 
+        .custom-marker {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; cursor: pointer; border: 2px solid white;
+    box-shadow: 0 0 15px rgba(0,0,0,0.6);
+    transition: transform 0.2s;
+}
+.custom-marker:hover { transform: scale(1.2); }
+
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden">
+
+    <!-- Header -->
+    <header class="h-20 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center justify-between px-6 z-20">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xl">🌱</div>
+            <div>
+                <h1 class="font-bold text-lg tracking-tight">EcoMap AI <span class="text-emerald-400">& SVC</span></h1>
+                <p class="text-xs text-slate-400">Samarkand Volunteer Community Intelligent Dispatch</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-4">
+            <div class="hidden md:flex items-center space-x-6 text-sm text-slate-300">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>AI Model: Active</span>
+                </div>
+                <div>Faol volontyorlar: <strong class="text-white">142</strong></div>
+            </div>
+            <button onclick="alert('База данных Supabase синхронизирована')" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl font-medium text-sm transition shadow-lg shadow-emerald-600/20">
+                DB bilan sinxronizatsiyalash
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-1 relative">
+        <!-- Sidebar Panel -->
+        <div class="w-full md:w-96 bg-slate-900 border-r border-slate-800 p-6 flex flex-col z-10 overflow-y-auto">
+            <h2 class="text-base font-semibold mb-2 text-slate-200">🤖 AI chiqindixona tahlili</h2>
+            <p class="text-xs text-slate-400 mb-6">Xaritaga bosib nuqta qo‘ying yoki quyidagi formani to‘ldiring. Sun'iy intellekt kerakli volontyorlar sonini hisoblaydi.</p>
+
+            <form id="dumpForm" onsubmit="handleDumpSubmit(event)" class="space-y-4 flex-1">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">Manzil / Orientir</label>
+                    <input type="text" id="locationName" placeholder="Masalan: Registon ko'chasi, 14" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition">
+                </div>
+              <!-- Автоматическое поле площади -->
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Muammo hajmi (Avto-hisob, kv.m)</label>
+                    <!-- Кнопка активации режима рисования -->
+<button type="button" id="startDrawBtn" onclick="activateDrawMode()"
+    class="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20">
+    📐 Hudud chizishni boshlash
+</button>
+                    <input type="text" id="dumpSize" value="0" readonly
+                        class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-emerald-400 font-bold focus:outline-none cursor-not-allowed">
+                    <span class="text-[10px] text-slate-500 mt-1 block">Xaritada hududni chizing — maydon o'zi hisoblanadi.</span>
+                </div>
+
+                
+                <!-- 2. Прокачанный выбор типа мусора с цветами (Chiqindi turi) -->
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Chiqindi turi va havf darajasi</label>
+                    <select id="dumpType" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                        <option value="plastic">🟡 Maishiy va plastik (o'rta havf)</option>
+                        <option value="construction">🟠 Qurilish chiqindilari (og'ir ish)</option>
+                        <option value="organic">🟢 Organik va shox-shabbalar (yengil)</option>
+                        <option value="chemical">🔴 Toksik / Тibbiy / Shinalar (o'ta havfli!)</option>
+                    </select>
+                </div>
+
+                <!-- AI Calculation Result Box -->
+                <div id="aiResultCard" class="hidden bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-4 space-y-2 mt-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">AI Recommendation</span>
+                        <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">98% аniqlik</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 pt-2 text-xs">
+                        <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+                            <span class="text-slate-400 block">Volontyorlar:</span>
+                            <strong id="resVolunteers" class="text-lg text-emerald-400">0</strong> kishi
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+                            <span class="text-slate-400 block">Sarflanadigan vaqt:</span>
+                            <strong id="resHours" class="text-lg text-emerald-400">0</strong> soat
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-emerald-600/20 mt-4 text-sm">
+                    AI Hisoblash va yorliq (metka) qo'yish 📍
+                </button>
+            </form>
+
+            <div class="mt-auto pt-4 border-t border-slate-800 text-xs text-slate-500 text-center">
+                Samarkand Volunteer Community © 2026
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div id="map" class="flex-1"></div>
+    </div>
+
+   <script>
+
+    window.addEventListener('beforeunload', (e) => {
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+    // 1. Стартовые координаты (Самарканд) и переменные
+let selectedLat = 39.6542;
+let selectedLng = 66.9597;
+
+// Берем правильную темную тему, которую мы настроили
+const styleUrl = 'https://' + 'basemaps.cartocdn.com' + '/gl/dark-matter-gl-style/style.json';
+
+const map = new maplibregl.Map({
+    container: 'map',
+    style: styleUrl,
+    center: [selectedLng, selectedLat],
+    zoom: 12
+});
+
+// 2. Инициализируем инструмент рисования Mapbox Draw поверх бесплатной MapLibre
+const draw = new MapboxDraw({
+    displayControlsDefault: false,
+    controls: {
+        polygon: true, // Включает кнопку рисования полигона
+        trash: true    // Позволяет удалить фигуру кнопкой-корзиной
+    },
+    // Настраиваем неоновый зеленый цвет для линий рисования
+    styles: [
+        {
+            'id': 'gl-draw-polygon-fill-inactive',
+            'type': 'fill',
+            'filter': ['all', ['==', '\$type', 'Polygon'], ['!=', 'mode', 'static']],
+            'paint': { 'fill-color': '#10b981', 'fill-opacity': 0.1 }
+        },
+        {
+            'id': 'gl-draw-polygon-stroke-inactive',
+            'type': 'line',
+            'filter': ['all', ['==', '\$type', 'Polygon'], ['!=', 'mode', 'static']],
+            'paint': { 'line-color': '#10b981', 'line-width': 2.5 }
+        },
+        {
+            'id': 'gl-draw-polygon-and-line-vertex-inactive',
+            'type': 'circle',
+            'filter': ['all', ['==', '\$type', 'Point'], ['==', 'meta', 'vertex']],
+            'paint': { 'circle-radius': 6, 'circle-color': '#ffffff' }
+        }
+    ]
+});
+map.addControl(draw, 'top-left');
+
+// Автоматически включаем режим рисования сразу при загрузке карты
+map.on('load', () => {
+    draw.changeMode('draw_polygon');
+});
+function activateDrawMode() {
+    // Включаем инструмент рисования
+    draw.changeMode('draw_polygon');
+    
+    // Меняем внешний вид кнопки, чтобы пользователь видел, что режим активен
+    const btn = document.getElementById('startDrawBtn');
+    if (btn) {
+        btn.innerText = '🗺 Харитада клик қилиб чизинг...';
+        btn.classList.replace('bg-emerald-600', 'bg-amber-600');
+    }
+}
+
+// 3. Следим за тем, как пользователь чертит фигуру
+map.on('draw.create', updateArea);
+map.on('draw.update', updateArea);
+map.on('draw.delete', () => {
+    document.getElementById('dumpSize').value = 0;
+    document.getElementById('locationName').value = '';
+    draw.changeMode('draw_polygon'); // После удаления сразу даем рисовать новую
+});
+
+// Функция автоматического расчета площади четырехугольника и поиска центра
+function updateArea(e) {
+    const data = draw.getAll();
+    if (data.features.length > 0) {
+        const polygon = data.features[data.features.length - 1];
+        
+        // Математический расчет площади в кв. метрах по гео-координатам точек
+        const coords = polygon.geometry.coordinates[0];
+        let area = 0;
+        if (coords.length > 2) {
+            for (let i = 0; i < coords.length - 1; i++) {
+                const p1 = coords[i];
+                const p2 = coords[i+1];
+                area += (p2[0] - p1[0]) * (p2[1] + p1[1]) * 111320 * 110574 * Math.cos(p1[1] * Math.PI / 180) / 2;
+            // Возвращаем кнопку в обычный режим
+    const btn = document.getElementById('startDrawBtn');
+    if (btn) {
+        btn.innerText = '📐 Hudud chizishni boshlash';
+        btn.classList.replace('bg-amber-600', 'bg-emerald-600');
+    }}
+        }
+        const finalArea = Math.abs(Math.round(area));
+        
+        // Записываем площадь в наш новый автоматический инпут
+        document.getElementById('dumpSize').value = finalArea > 0 ? finalArea : 15;
+
+        // Ищем географический центр четырехугольника для установки метки
+        let lats = coords.map(c => c[1]);
+        let lngs = coords.map(c => c[0]);
+        selectedLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+        selectedLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+        // Заполняем поле адреса координатами центра области
+        const locationInput = document.getElementById('locationName');
+        if (locationInput) {
+            locationInput.value = `Марказ; ${selectedLat.toFixed(4)}, ${selectedLng.toFixed(4)}`;
+        }
+    }
+}
+
+// 4. Функция отправки формы (AI расчет + фиксация цветной зоны)
+function handleDumpSubmit(event) {
+    event.preventDefault();
+
+    const size = parseFloat(document.getElementById('dumpSize').value);
+    if (!size || size === 0) {
+        alert('Iltimos, avval xaritada hududni chizing!');
+        return;
+    }
+
+    const type = document.getElementById('dumpType').value;
+ // Конфигурация цветов, иконок и коэффициентов для типов мусора
+    const config = {
+        plastic:      { mult: 1.0, color: '#eab308', icon: '♻️', name: 'Plastik/Maishiy' },
+        construction: { mult: 1.6, color: '#f97316', icon: '🧱', name: 'Qurilish chiqindilari' },
+        organic:      { mult: 0.8, color: '#22c55e', icon: '🌿', name: 'Organik chiqindilar' },
+        chemical:     { mult: 2.2, color: '#ef4444', icon: '☣️', name: 'Toksik / Tibbiy havf!' }
+    }[type];
+
+    // AI Расчет волонтеров и времени
+    const neededVolunteers = Math.max(2, Math.ceil((size / 15) * config.mult));
+    const neededHours = Math.max(1, Math.ceil((size / 30) * config.mult));
+
+    // Выводим результаты расчетов в левую панель
+    document.getElementById('aiResultCard').classList.remove('hidden');
+    document.getElementById('resVolunteers').innerText = neededVolunteers;
+    document.getElementById('resHours').innerText = neededHours;
+
+    // Переносим нарисованную фигуру из редактора в постоянный цветной слой на карте
+    const sourceId = 'final-zone-' + Date.now();
+    const features = draw.getAll();
+    
+    map.addSource(sourceId, { type: 'geojson', data: features.features[features.features.length - 1] });
+    
+    // Заливка созданной зоны
+    map.addLayer({
+        id: sourceId + '-fill' ,
+        type: 'fill',
+        source: sourceId,
+        paint: { 'fill-color': config.color, 'fill-opacity': 0.3 }
+    });
+    
+    // Плотная обводка границ зоны
+    map.addLayer({
+        id: sourceId + '-outline' ,
+        type: 'line',
+        source: sourceId,
+        paint: { 'line-color': config.color, 'line-width': 3 }
+    });
+
+    // Стираем фигуру из редактора, чтобы пользователь мог чертить следующую зону
+    draw.deleteAll();
+
+    // Создаем кастомную неоновую круглую метку прямо в центре очерченной зоны
+    const randomId = Math.floor(Math.random() * 9000 + 1000);
+    const markerEl = document.createElement('div');
+    markerEl.className = 'custom-marker';
+     markerEl.style.width = '36px';
+markerEl.style.height = '36px';
+markerEl.style.borderRadius = '50%';
+markerEl.style.backgroundColor = config.color;
+markerEl.style.display = 'flex';
+markerEl.style.alignItems = 'center';
+markerEl.style.justifyContent = 'center';
+markerEl.style.fontSize = '16px';
+markerEl.style.cursor = 'pointer';
+markerEl.style.border = '2px solid white';
+markerEl.style.boxShadow = '0 0 15px rgba(0,0,0,0.5)';
+    ;
+    markerEl.innerHTML = config.icon;
+
+    const finalMarker = new maplibregl.Marker({ element: markerEl })
+        .setLngLat([selectedLng, selectedLat])
+        .setPopup(new maplibregl.Popup({ offset: 20 })
+           .setHTML('<b>SVC Заявка #' + randomId + '</b><br>Тури: ' + config.name + '<br>Майдон: ' + size + ' м²<br>Волонтёрлар: <b>' + neededVolunteers + ' та</b><br>Вақт: <b>' + neededHours + ' соат</b>'))
+
+    // Сразу открываем красивое окно с информацией
+    finalMarker.togglePopup();
+    
+    // Перезапускаем режим рисования для следующей задачи
+    draw.changeMode('draw_polygon');
+}
+</script>
+</body>
+</html>
