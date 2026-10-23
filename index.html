@@ -49,6 +49,12 @@
     }
 }
 
+     /* Разрешаем элементам интерфейса прокручиваться на смартфонах */
+form, .w-96 {
+    touch-action: pan-y !important;
+    overflow-y: auto !important;
+}
+
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden">
